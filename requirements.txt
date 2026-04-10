@@ -5,3 +5,4 @@ google-generativeai
 python-multipart
 yt-dlp
 curl_cffi
+openai-whisper
