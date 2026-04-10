@@ -1,0 +1,15 @@
+name: Sync to HF Space
+on:
+  push:
+    branches: [main]
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Push to HF
+        run: |
+          git remote add hf https://sungsull:${{ secrets.HF_TOKEN }}@huggingface.co/spaces/[HF유저명]/[space명]
+          git push hf main --force
