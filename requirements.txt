@@ -6,4 +6,3 @@ python-multipart
 yt-dlp
 curl_cffi
 openai-whisper
-yt-dlp-get-pot @ https://github.com/coletdjnz/yt-dlp-get-pot/archive/refs/heads/master.zip
