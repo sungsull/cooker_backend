@@ -25,7 +25,7 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 gemini_model = genai.GenerativeModel('models/gemini-1.5-flash')
 
-# Whisper 모델 로드 (서버 시작 시 1회만 로드)
+# Whisper 모델 로드
 print("Whisper 모델 로딩 중...")
 whisper_model = whisper.load_model("small")
 print("Whisper 모델 로딩 완료!")
@@ -33,7 +33,6 @@ print("Whisper 모델 로딩 완료!")
 class VideoURL(BaseModel):
     url: str
 
-# 메인 페이지: index.html 반환
 @app.get("/")
 def home():
     return FileResponse("index.html")
@@ -48,7 +47,7 @@ async def create_recipe(item: VideoURL):
         if os.path.exists(audio_file):
             os.remove(audio_file)
 
-        # A. 오디오 다운로드
+        # A. 오디오 다운로드 (우회 옵션 강화)
         ydl_opts = {
             'format': 'm4a/bestaudio/best',
             'outtmpl': 'temp_audio.%(ext)s',
@@ -56,7 +55,16 @@ async def create_recipe(item: VideoURL):
             'writeautomaticsub': True,
             'subtitleslangs': ['ko', 'en'],
             'quiet': True,
+            'no_warnings': True,
+            # [핵심] 실제 브라우저처럼 보이게 만드는 헤더 설정
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'referer': 'https://www.youtube.com/',
+            'http_headers': {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+            }
         }
+        
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(item.url, download=True)
             video_title = info.get('title', '제목 없음')
@@ -99,7 +107,6 @@ async def create_recipe(item: VideoURL):
 
         # D. Gemini 요약
         print("--- 4. Gemini 레시피 요약 중 ---")
-
         context_parts = [f"[영상 제목]: {video_title}"]
         if video_description:
             context_parts.append(f"[영상 설명]: {video_description}")
@@ -151,5 +158,4 @@ async def create_recipe(item: VideoURL):
         return {"status": "error", "message": f"오류 발생: {str(e)}"}
 
 if __name__ == "__main__":
-    # Hugging Face Spaces 기본 포트 7860 유지
     uvicorn.run(app, host="0.0.0.0", port=7860)
