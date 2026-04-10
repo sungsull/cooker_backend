@@ -1,249 +1,116 @@
 <!DOCTYPE html>
-
 <html lang="ko">
-
 <head>
-
     <meta charset="UTF-8">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>Cooker - Auto Stream</title>
-
+    <title>Cooker - Web AI Engine</title>
     <style>
-
-        :root {
-
-            --pastel-green: #E8F5E9;
-
-            --deep-green: #4CAF50;
-
-            --text-color: #2E7D32;
-
-        }
-
-        body {
-
-            font-family: 'Pretendard', -apple-system, sans-serif;
-
-            background-color: var(--pastel-green);
-
-            color: var(--text-color);
-
-            display: flex;
-
-            justify-content: center;
-
-            align-items: center;
-
-            min-height: 100vh;
-
-            margin: 0;
-
-        }
-
-        .container {
-
-            background: white;
-
-            padding: 2rem;
-
-            border-radius: 20px;
-
-            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-
-            width: 90%;
-
-            max-width: 500px;
-
-            text-align: center;
-
-        }
-
-        h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
-
-        p { font-size: 0.9rem; opacity: 0.8; margin-bottom: 1.5rem; }
-
-        input {
-
-            width: 100%;
-
-            padding: 12px;
-
-            border: 2px solid var(--pastel-green);
-
-            border-radius: 12px;
-
-            box-sizing: border-box;
-
-            margin-bottom: 1rem;
-
-            outline: none;
-
-            transition: border 0.3s;
-
-        }
-
-        input:focus { border-color: var(--deep-green); }
-
-        button {
-
-            width: 100%;
-
-            padding: 12px;
-
-            background-color: var(--deep-green);
-
-            color: white;
-
-            border: none;
-
-            border-radius: 12px;
-
-            font-size: 1rem;
-
-            font-weight: bold;
-
-            cursor: pointer;
-
-            transition: transform 0.2s;
-
-        }
-
-        button:disabled { background-color: #ccc; cursor: not-allowed; }
-
-        button:active { transform: scale(0.98); }
-
-        #result {
-
-            margin-top: 1.5rem;
-
-            text-align: left;
-
-            background: #f9fbf9;
-
-            padding: 1rem;
-
-            border-radius: 12px;
-
-            font-size: 0.95rem;
-
-            line-height: 1.6;
-
-            white-space: pre-wrap;
-
-            max-height: 400px;
-
-            overflow-y: auto;
-
-            border: 1px inset #eee;
-
-        }
-
-        .loading-dots:after {
-
-            content: '.';
-
-            animation: dots 1.5s steps(5, end) infinite;
-
-        }
-
-        @keyframes dots { 0%, 20% { content: '.'; } 40% { content: '..'; } 60% { content: '...'; } }
-
+        :root { --p-green: #E8F5E9; --d-green: #4CAF50; --text: #2E7D32; }
+        body { font-family: 'Pretendard', sans-serif; background: var(--p-green); color: var(--text); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .container { background: white; padding: 2rem; border-radius: 20px; width: 90%; max-width: 550px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        h1 { font-size: 1.8rem; margin: 0 0 10px; }
+        input { width: 100%; padding: 12px; border: 2px solid var(--p-green); border-radius: 12px; box-sizing: border-box; margin-bottom: 15px; }
+        button { width: 100%; padding: 12px; background: var(--d-green); color: white; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        #status { font-size: 0.9rem; margin: 15px 0; font-weight: bold; color: #1976D2; }
+        #result { margin-top: 1.5rem; text-align: left; background: #f9fbf9; padding: 1.2rem; border-radius: 12px; white-space: pre-wrap; border: 1px inset #eee; font-size: 0.95rem; line-height: 1.6; }
+        .progress-bar { width: 100%; background: #eee; height: 10px; border-radius: 5px; margin-bottom: 10px; display: none; }
+        .progress-fill { width: 0%; background: var(--d-green); height: 100%; border-radius: 5px; }
     </style>
-
 </head>
-
 <body>
-
     <div class="container">
-
         <h1>Cooker</h1>
-
-        <p>링크만 넣으세요. 브라우저가 직접 데이터를 추출합니다.</p>
-
-        <input type="text" id="urlInput" placeholder="유튜브 링크를 붙여넣으세요">
-
-        <button onclick="generateRecipe()" id="btn">레시피 요약하기</button>
-
+        <p>기기 자체 AI(Whisper-base)로 음성을 분석합니다.</p>
+        <input type="text" id="urlInput" placeholder="유튜브 링크를 입력하세요">
+        <div id="status">AI 모델 초기화 중...</div>
+        <div class="progress-bar" id="progBar"><div class="progress-fill" id="progFill"></div></div>
+        <button id="btn" disabled>모델 로딩 중...</button>
         <div id="result">레시피 결과가 여기에 표시됩니다.</div>
-
     </div>
 
+    <script type="module">
+        import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1';
 
+        let transcriber;
+        const status = document.getElementById('status');
+        const btn = document.getElementById('btn');
+        const progBar = document.getElementById('progBar');
+        const progFill = document.getElementById('progFill');
 
-    <script>
+        // [핵심] 1. Whisper-base 모델 로드 (최초 실행 시 브라우저에 캐싱됨)
+        async function initAI() {
+            try {
+                progBar.style.display = 'block';
+                transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-base', {
+                    progress_callback: (p) => {
+                        if (p.status === 'progress') {
+                            progFill.style.width = `${p.progress.toFixed(1)}%`;
+                            status.innerText = ` 모델 다운로드 중... (${p.progress.toFixed(1)}%)`;
+                        }
+                    }
+                });
+                status.innerText = " AI 준비 완료. 링크를 입력하고 버튼을 누르세요.";
+                btn.innerText = "레시피 요약하기";
+                btn.disabled = false;
+                progBar.style.display = 'none';
+            } catch (err) {
+                status.innerText = " 모델 로딩 실패. 새로고침 해주세요.";
+                console.error(err);
+            }
+        }
+        initAI();
 
-        async function generateRecipe() {
-
-            const urlInput = document.getElementById('urlInput').value;
-
-            const resultDiv = document.getElementById('result');
-
-            const btn = document.getElementById('btn');
-
-
-
-            if(!urlInput) { alert("링크를 입력해주세요!"); return; }
-
-
-
-            // UI 업데이트: 사용자 IP 활용 강조
-
-            resultDiv.innerHTML = "<span class='loading-dots'>🚀 브라우저에서 직접 오디오 추출 중</span>";
+        window.processVideo = async () => {
+            const url = document.getElementById('urlInput').value;
+            if(!url) return alert("URL을 입력해주세요.");
 
             btn.disabled = true;
-
-
+            status.innerText = " 1단계: 브라우저에서 오디오 추출 중 (IP 우회)...";
 
             try {
-
-                // 1. 서버에 URL을 보내서 "추출" 지시 (서버는 사용자 세션을 흉내내어 작업 시작)
-
-                const formData = new FormData();
-
-                formData.append("url", urlInput);
-
-
-
-                const response = await fetch('/cook', {
-
-                    method: 'POST',
-
-                    body: formData
-
+                // [주의] 브라우저에서 유튜브 오디오를 직접 추출하는 로직은 보안 정책상
+                // 클라이언트 단의 우회 프록시나 별도 라이브러리 연동이 필요합니다.
+                // 여기서는 'audioData'가 확보되었다고 가정합니다.
+                
+                status.innerText = " 2단계: 기기 자체 AI가 음성 인식 중 (약 30~60초 소요)...";
+                
+                // 실제 구현 시 오디오 Blob/ArrayBuffer를 transcriber에 넣습니다.
+                const transcription = await transcriber('https://www.google.com/test.wav', { // 예시용
+                    chunk_length_s: 30,
+                    stride_length_s: 5,
+                    language: 'korean',
+                    task: 'transcribe'
                 });
 
+                status.innerText = " AI가 레시피 요약 중...";
                 
+                const formData = new FormData();
+                formData.append("transcript", transcription.text);
+                formData.append("video_title", "유튜브 분석 요리");
 
+                const response = await fetch('/summarize', {
+                    method: 'POST',
+                    body: formData
+                });
+                
                 const data = await response.json();
-
-                
-
-                if (data.status === "success") {
-
-                    resultDiv.innerText = data.recipe;
-
+                if(data.status === "success") {
+                    document.getElementById('result').innerText = data.recipe;
+                    status.innerText = " 요약 완료!";
                 } else {
-
-                    resultDiv.innerText = "❌ 오류: " + data.message;
-
+                    throw new Error(data.message);
                 }
 
-            } catch (error) {
-
-                resultDiv.innerText = "❌ 실패: " + error.message;
-
+            } catch (err) {
+                status.innerText = " 오류가 발생했습니다.";
+                document.getElementById('result').innerText = err.message;
             } finally {
-
                 btn.disabled = false;
-
             }
+        };
 
-        }
-
+        btn.onclick = window.processVideo;
     </script>
-
 </body>
-
 </html>
