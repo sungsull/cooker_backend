@@ -3,6 +3,6 @@ uvicorn
 pydantic
 google-generativeai
 python-multipart
-openai-whisper
+faster-whisper
 requests
 yt-dlp

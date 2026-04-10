@@ -8,7 +8,7 @@ from fastapi import FastAPI, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import yt_dlp
-import whisper
+from faster_whisper import WhisperModel
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 app.add_middleware(
@@ -23,10 +23,9 @@ genai.configure(api_key=GEMINI_API_KEY)
 gemini_model = genai.GenerativeModel('models/gemini-1.5-flash')
 
 print("Whisper 모델 로딩 중...")
-whisper_model = whisper.load_model("tiny")
+whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8")
 print("Whisper 모델 로딩 완료!")
 
-# 쿠키 파일 생성 (환경변수 → 임시파일)
 COOKIE_FILE_PATH = None
 youtube_cookies = os.environ.get("YOUTUBE_COOKIES")
 if youtube_cookies:
@@ -81,7 +80,6 @@ async def process_video(url: str = Form(...)):
         if not video_id:
             return {"status": "error", "message": "유효한 YouTube URL이 아닙니다."}
 
-        # 1단계: yt-dlp로 오디오 다운로드
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as f:
             tmp_path = f.name
 
@@ -92,11 +90,10 @@ async def process_video(url: str = Form(...)):
             info = ydl.extract_info(url, download=True)
             title = info.get('title', '요리 영상')
 
-        # 2단계: Whisper 음성인식
-        transcribe_result = whisper_model.transcribe(tmp_path, language="ko")
-        transcript = transcribe_result["text"]
+        # faster-whisper는 segments 방식으로 반환
+        segments, _ = whisper_model.transcribe(tmp_path, language="ko")
+        transcript = " ".join([seg.text for seg in segments])
 
-        # 3단계: Gemini 요약
         prompt = (
             f"요리 전문가로서 다음 내용을 아래 형식으로 요약해줘. 마크다운(**) 금지.\n\n"
             f"[요리 이름]\n[재료]\n[조리 순서]\n[꿀팁]\n\n"
