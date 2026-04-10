@@ -20,7 +20,6 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 gemini_model = genai.GenerativeModel('models/gemini-1.5-flash')
 
-# Whisper 모델 초기화 (서버 시작 시 1회 로드)
 import whisper
 print("Whisper 모델 로딩 중...")
 whisper_model = whisper.load_model("base")
@@ -29,6 +28,7 @@ print("Whisper 모델 로딩 완료!")
 @app.get("/")
 def home():
     return FileResponse("index.html")
+
 @app.get("/script.js")
 def serve_script():
     return FileResponse("script.js")
@@ -40,7 +40,14 @@ async def get_audio_url(url: str = Form(...)):
             'format': 'bestaudio/best',
             'quiet': True,
             'no_warnings': True,
-            'extractor_args': {'youtube': {'player_client': ['android', 'web']}}
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['web'],
+                }
+            },
+            'get_pot_args': {
+                'server_url': 'http://localhost:4416'
+            }
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -56,7 +63,6 @@ async def get_audio_url(url: str = Form(...)):
 async def transcribe_audio(audio_url: str = Form(...)):
     tmp_path = None
     try:
-        # 오디오 스트림 다운로드 (최대 50MB)
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(audio_url, headers=headers, stream=True, timeout=60)
         response.raise_for_status()
@@ -66,11 +72,10 @@ async def transcribe_audio(audio_url: str = Form(...)):
             for chunk in response.iter_content(chunk_size=1024 * 1024):
                 f.write(chunk)
                 downloaded += len(chunk)
-                if downloaded > 50 * 1024 * 1024:  # 50MB 제한
+                if downloaded > 50 * 1024 * 1024:
                     break
             tmp_path = f.name
 
-        # 서버에서 Whisper로 음성 인식
         result = whisper_model.transcribe(tmp_path, language="ko")
         return {"status": "success", "text": result["text"]}
 
