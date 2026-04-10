@@ -31,6 +31,9 @@ PIPED_INSTANCES = [
     "https://piped-api.garudalinux.org",
     "https://api.piped.projectsegfault.net",
     "https://pipedapi.colinslegacy.com",
+    "https://piped.privacyredirect.com/api",
+    "https://watchapi.whatever.social",
+    "https://api.piped.yt",
 ]
 
 def extract_video_id(url: str):
@@ -102,6 +105,33 @@ def home():
 @app.get("/script.js")
 def serve_script():
     return FileResponse("script.js")
+
+@app.get("/debug")
+async def debug_piped():
+    headers = {"User-Agent": "Mozilla/5.0"}
+    results = {}
+    test_video_id = "dQw4w9WgXcQ"
+
+    for instance in PIPED_INSTANCES:
+        try:
+            resp = requests.get(
+                f"{instance}/streams/{test_video_id}",
+                headers=headers,
+                timeout=8
+            )
+            results[instance] = {
+                "status_code": resp.status_code,
+                "has_audio": bool(resp.json().get('audioStreams')) if resp.status_code == 200 else False,
+                "error": None
+            }
+        except Exception as e:
+            results[instance] = {
+                "status_code": None,
+                "has_audio": False,
+                "error": str(e)
+            }
+
+    return results
 
 @app.post("/process")
 async def process_video(url: str = Form(...)):
