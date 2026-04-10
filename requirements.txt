@@ -9,3 +9,4 @@ torchaudio
 torchvision
 setuptools-rust
 ffmpeg-python
+curl_cffi

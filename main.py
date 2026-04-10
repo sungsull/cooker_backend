@@ -9,6 +9,7 @@ import google.generativeai as genai
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from fastapi.responses import FileResponse
+from curl_cffi import requests  # [추가] 브라우저 지문 위장용
 
 app = FastAPI()
 
@@ -42,12 +43,23 @@ async def create_recipe(item: VideoURL):
     audio_file = "temp_audio.m4a"
 
     try:
-        print(f"--- 1. 작업 시작: {item.url} ---")
+        print(f"--- 1. 작업 시작 (curl_cffi 지문 위장): {item.url} ---")
 
         if os.path.exists(audio_file):
             os.remove(audio_file)
 
-        # A. 오디오 다운로드 (우회 옵션 강화)
+        # [핵심] curl_cffi를 사용하여 브라우저 세션 지문을 먼저 생성합니다.
+        session = requests.Session()
+        session.get(
+            item.url,
+            impersonate="chrome110",  # 크롬 지문 복제
+            headers={
+                "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+                "Referer": "https://www.google.com/"
+            }
+        )
+
+        # A. 오디오 다운로드 (우회 옵션 풀가동)
         ydl_opts = {
             'format': 'm4a/bestaudio/best',
             'outtmpl': 'temp_audio.%(ext)s',
@@ -56,8 +68,10 @@ async def create_recipe(item: VideoURL):
             'subtitleslangs': ['ko', 'en'],
             'quiet': True,
             'no_warnings': True,
-            # [핵심] 실제 브라우저처럼 보이게 만드는 헤더 설정
-            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            # 재욱님이 요청하신 차단 우회 옵션들
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
+            'sleep_interval': 5,
+            'max_sleep_interval': 10,
             'referer': 'https://www.youtube.com/',
             'http_headers': {
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -91,7 +105,7 @@ async def create_recipe(item: VideoURL):
         if not transcript:
             return {"status": "error", "message": "음성 인식 결과가 없습니다."}
 
-        # C. 자막 보조 데이터 수집
+        # C. 자막 보조 데이터 수집 (기존 로직 유지)
         subtitle_text = ""
         for ext in ["ko.vtt", "en.vtt", "ko.srt", "en.srt"]:
             sub_path = f"temp_audio.{ext}"
