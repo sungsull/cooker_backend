@@ -5,27 +5,84 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cooker AI - 레시피 요약기</title>
     <style>
-        :root { --p-green: #E8F5E9; --d-green: #4CAF50; }
-        body { font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif; background: var(--p-green); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        .container { background: white; padding: 2rem; border-radius: 20px; width: 90%; max-width: 500px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        :root {
+            --p-green: #E8F5E9;
+            --d-green: #4CAF50;
+        }
+        body {
+            font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+            background: var(--p-green);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+        }
         h1 { color: var(--d-green); margin-bottom: 1.5rem; }
-        input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; }
-        #status { margin: 15px 0; font-size: 0.9rem; color: #1976D2; font-weight: bold; min-height: 1.2rem; }
-        button { width: 100%; padding: 14px; background: var(--d-green); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; font-size: 1rem; transition: 0.3s; }
+        input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            box-sizing: border-box;
+            font-size: 0.95rem;
+        }
+        #status {
+            margin: 15px 0;
+            font-size: 0.9rem;
+            color: #1976D2;
+            font-weight: bold;
+            min-height: 1.2rem;
+        }
+        button {
+            width: 100%;
+            padding: 14px;
+            background: var(--d-green);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1rem;
+            transition: 0.3s;
+        }
         button:disabled { background: #ccc; cursor: not-allowed; }
-        #result { margin-top: 20px; text-align: left; background: #f9f9f9; padding: 15px; border-radius: 12px; white-space: pre-wrap; font-size: 0.95rem; line-height: 1.6; max-height: 400px; overflow-y: auto; }
+        #result {
+            margin-top: 20px;
+            text-align: left;
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 12px;
+            white-space: pre-wrap;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            max-height: 400px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🍳 Cooker AI</h1>
-        <p style="font-size: 0.85rem; color: #666; margin-bottom: 20px;">유튜브 링크만 넣으면 AI가 레시피를 정리합니다.</p>
+        <p style="font-size: 0.85rem; color: #666; margin-bottom: 20px;">
+            유튜브 링크만 넣으면 AI가 레시피를 정리합니다.
+        </p>
         <input type="text" id="urlInput" placeholder="유튜브 영상 주소를 입력하세요">
-        <div id="status">AI 엔진 준비 중...</div>
-        <button id="btn" disabled>대기 중</button>
+        <div id="status">✅ 준비 완료! 링크를 넣어주세요.</div>
+        <button id="btn">레시피 요약하기</button>
         <div id="result">레시피 요약 결과가 여기에 표시됩니다.</div>
     </div>
 
-    <script type="module" src="script.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
