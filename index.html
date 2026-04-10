@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cooker</title>
+    <style>
+        :root {
+            --pastel-green: #E8F5E9;
+            --deep-green: #4CAF50;
+            --text-color: #2E7D32;
+        }
+        body {
+            font-family: 'Pretendard', -apple-system, sans-serif;
+            background-color: var(--pastel-green);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+        }
+        h1 { font-size: 1.8rem; margin-bottom: 0.5rem; }
+        p { font-size: 0.9rem; opacity: 0.8; margin-bottom: 1.5rem; }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid var(--pastel-green);
+            border-radius: 12px;
+            box-sizing: border-box;
+            margin-bottom: 1rem;
+            outline: none;
+            transition: border 0.3s;
+        }
+        input:focus { border-color: var(--deep-green); }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--deep-green);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        button:active { transform: scale(0.98); }
+        #result {
+            margin-top: 1.5rem;
+            text-align: left;
+            background: #f9fbf9;
+            padding: 1rem;
+            border-radius: 12px;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px inset #eee;
+        }
+        .loading-dots:after {
+            content: '.';
+            animation: dots 1.5s steps(5, end) infinite;
+        }
+        @keyframes dots { 0%, 20% { content: '.'; } 40% { content: '..'; } 60% { content: '...'; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Cooker</h1>
+        <p>유튜브 요리 영상 링크를 넣으면 레시피를 요약해드립니다</p>
+        <input type="text" id="urlInput" placeholder="유튜브 링크를 붙여넣으세요">
+        <button onclick="generateRecipe()" id="btn">레시피 요약하기</button>
+        <div id="result">레시피 결과가 여기에 표시됩니다.</div>
+    </div>
+
+    <script>
+        async function generateRecipe() {
+            const urlInput = document.getElementById('urlInput').value;
+            const resultDiv = document.getElementById('result');
+            const btn = document.getElementById('btn');
+
+            if(!urlInput) { alert("링크를 입력해주세요!"); return; }
+
+            resultDiv.innerHTML = "<span class='loading-dots'>재료 손질 중</span>";
+            btn.disabled = true;
+
+            try {
+                // 현재 도메인의 /cook 엔드포인트로 요청
+                const response = await fetch('/cook', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: urlInput })
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === "success") {
+                    resultDiv.innerText = data.recipe;
+                } else {
+                    resultDiv.innerText = "❌ 오류: " + data.message;
+                }
+            } catch (error) {
+                resultDiv.innerText = "❌ 서버 연결 실패: " + error.message;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

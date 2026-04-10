@@ -1,4 +1,3 @@
-# app.py
 import os
 import time
 import re
@@ -9,9 +8,11 @@ import whisper
 import google.generativeai as genai
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+from fastapi.responses import FileResponse
 
 app = FastAPI()
 
+# CORS 설정
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,10 +21,8 @@ app.add_middleware(
 )
 
 # --- [1단계] 설정 구간 ---
-# Hugging Face Spaces > Settings > Repository secrets 에 등록한 키를 가져옵니다.
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
-
 gemini_model = genai.GenerativeModel('models/gemini-1.5-flash')
 
 # Whisper 모델 로드 (서버 시작 시 1회만 로드)
@@ -34,9 +33,10 @@ print("Whisper 모델 로딩 완료!")
 class VideoURL(BaseModel):
     url: str
 
+# 메인 페이지: index.html 반환
 @app.get("/")
 def home():
-    return {"message": "정상 가동 중입니다."}
+    return FileResponse("index.html")
 
 @app.post("/cook")
 async def create_recipe(item: VideoURL):
@@ -110,21 +110,18 @@ async def create_recipe(item: VideoURL):
         full_context = "\n\n".join(context_parts)
 
         prompt = f"""
-너는 최고의 요리 전문 에디터야.
-아래는 요리 영상의 음성을 텍스트로 변환한 내용이야. 이를 바탕으로
-다른 잡다한 설명 없이 오직 깔끔한 레시피 요약본만 작성해줘.
+너는 최고의 요리 전문 에디터야. 아래 내용을 바탕으로 깔끔한 레시피 요약본만 작성해줘.
 
 {full_context}
 
 [출력 형식]:
 1. 요리 이름:
-2. 핵심 재료: (계량 포함, 없으면 대략적인 양 추정)
-3. 요리 순서: (단계별 번호 사용, 구체적으로)
-4. 꿀팁: (맛의 비결, 주의사항 등)
+2. 핵심 재료:
+3. 요리 순서:
+4. 꿀팁:
 
-- 마크다운 특수 기호(**)는 절대 사용하지 마.
-- 순수 텍스트(Plain Text)로 한국어로 작성해줘.
-- 전사 텍스트가 불완전하더라도 최대한 유추해서 완성도 있게 작성해줘.
+- 마크다운 특수 기호(**)는 사용하지 마.
+- 한국어로 작성해줘.
 """
 
         response = gemini_model.generate_content(prompt)
@@ -148,14 +145,11 @@ async def create_recipe(item: VideoURL):
     except Exception as e:
         for f in os.listdir("."):
             if f.startswith("temp_audio"):
-                try:
-                    os.remove(f)
-                except:
-                    pass
+                try: os.remove(f)
+                except: pass
         print(f"!!! 에러 발생: {str(e)} !!!")
         return {"status": "error", "message": f"오류 발생: {str(e)}"}
 
-
 if __name__ == "__main__":
-    # Hugging Face Spaces 기본 포트는 7860
+    # Hugging Face Spaces 기본 포트 7860 유지
     uvicorn.run(app, host="0.0.0.0", port=7860)
