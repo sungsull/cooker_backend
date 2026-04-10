@@ -29,6 +29,9 @@ print("Whisper 모델 로딩 완료!")
 @app.get("/")
 def home():
     return FileResponse("index.html")
+@app.get("/script.js")
+def serve_script():
+    return FileResponse("script.js")
 
 @app.post("/get_audio_url")
 async def get_audio_url(url: str = Form(...)):
