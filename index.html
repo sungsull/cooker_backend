@@ -2,14 +2,16 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-eval' https://cdn.jsdelivr.net; object-src 'none';">
-    <title>Cooker - Web AI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src * 'unsafe-inline';">
+    <title>Cooker AI</title>
     <style>
+        /* CSS는 그대로 유지 */
         :root { --p-green: #E8F5E9; --d-green: #4CAF50; }
         body { font-family: sans-serif; background: var(--p-green); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
-        .container { background: white; padding: 2rem; border-radius: 20px; width: 90%; max-width: 500px; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .container { background: white; padding: 2rem; border-radius: 20px; width: 90%; max-width: 500px; text-align: center; }
         #status { margin: 15px 0; font-size: 0.9rem; color: #1976D2; font-weight: bold; }
-        #result { margin-top: 15px; text-align: left; background: #f4f4f4; padding: 15px; border-radius: 10px; white-space: pre-wrap; font-size: 0.9rem; }
+        #result { margin-top: 15px; text-align: left; background: #f4f4f4; padding: 15px; border-radius: 10px; white-space: pre-wrap; }
     </style>
 </head>
 <body>
@@ -22,24 +24,30 @@
     </div>
 
     <script type="module">
+        // [수정] 모듈 방식에서 안전하게 로드
         import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1';
 
-        let transcriber;
         const btn = document.getElementById('btn');
         const status = document.getElementById('status');
+        let transcriber;
 
         async function init() {
             try {
                 status.innerText = "🤖 Whisper 모델 로딩 중... (최초 1회)";
+                // 모델 로딩 시 보안 정책 충돌 방지를 위해 env 설정 추가 가능
                 transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-base');
                 status.innerText = "✅ 준비 완료! 링크를 넣으세요.";
                 btn.disabled = false;
                 btn.innerText = "레시피 요약하기";
-            } catch(e) { status.innerText = "❌ 모델 로딩 에러"; }
+            } catch(e) { 
+                console.error(e);
+                status.innerText = "❌ 로딩 에러: " + e.message; 
+            }
         }
         init();
 
-        btn.onclick = async () => {
+        // 인라인 onclick 대신 addEventListener 사용 (보안 권장사항)
+        btn.addEventListener('click', async () => {
             const url = document.getElementById('urlInput').value;
             if(!url) return;
 
@@ -47,21 +55,18 @@
             status.innerText = "🔍 1단계: 오디오 주소 추출 중...";
 
             try {
-                // 1. 백엔드에서 오디오 직접 링크 받아오기
                 const fd1 = new FormData(); fd1.append("url", url);
                 const res1 = await fetch('/get_audio_url', { method: 'POST', body: fd1 });
                 const data1 = await res1.json();
                 
                 if(data1.status !== "success") throw new Error(data1.message);
 
-                // 2. 브라우저 Whisper로 음성 인식
-                status.innerText = "🧠 2단계: 내 기기에서 AI 분석 중 (약 1분 소요)...";
+                status.innerText = "🧠 2단계: 기기 AI 분석 중 (약 1분)...";
                 const output = await transcriber(data1.audio_url, { 
                     language: 'korean', task: 'transcribe' 
                 });
 
-                // 3. 백엔드로 텍스트 보내서 요약
-                status.innerText = "✍️ 3단계: 레시피 요약 중...";
+                status.innerText = "✍️ 3단계: Gemini 레시피 요약 중...";
                 const fd2 = new FormData();
                 fd2.append("transcript", output.text);
                 fd2.append("video_title", data1.title);
@@ -76,7 +81,7 @@
             } finally {
                 btn.disabled = false;
             }
-        };
+        });
     </script>
 </body>
 </html>
