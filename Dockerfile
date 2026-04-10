@@ -2,29 +2,34 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# 1. 시스템 의존성 설치 (ffmpeg 등)
+# 1. 시스템 의존성 설치
+# git, nodejs, npm은 외부 라이브러리 빌드에 필수입니다.
 RUN apt-get update && apt-get install -y \
     ffmpeg git nodejs npm curl \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Python 라이브러리 설치
+# 먼저 requirements.txt에 있는 기본 패키지들을 설치합니다.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# [수정] 외부 레포지토리 설치 시 에러가 잦으므로 --upgrade와 함께 별도 실행
-RUN pip install --no-cache-dir --upgrade "git+https://github.com/coletdjnz/yt-dlp-get-pot.git"
+# [핵심] 외부 GitHub 레포지토리는 여기서 단독으로 설치 (에러 방지)
+RUN pip install --no-cache-dir "git+https://github.com/coletdjnz/yt-dlp-get-pot.git"
 
-# 3. Node.js 라이브러리 설치 
-# [수정] npm 빌드 에러 방지를 위해 git 클론 후 설치하거나 최신 플래그 사용
-RUN npm install -g https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git --unsafe-perm
+# 3. Node.js POT provider 설치 (우회 방식)
+# npm install -g 방식의 경로 에러를 피하기 위해 직접 클론하여 빌드합니다.
+RUN git clone https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /opt/bgutil && \
+    cd /opt/bgutil && \
+    npm install && \
+    npm run build
 
-# 4. 소스 코드 복사
+# 4. 소스 코드 복사 및 권한 설정
 COPY . .
-
-# 5. 권한 설정 (Hugging Face는 특정 권한이 필요할 수 있음)
 RUN chmod -R 777 /app
 
+# Hugging Face 기본 포트
 EXPOSE 7860
 
-# 6. 실행 (bgutil 서버가 완전히 뜰 시간을 약간 주는 것이 좋습니다)
-CMD ["sh", "-c", "node $(npm root -g)/bgutil-ytdlp-pot-provider/build/server.js & sleep 5 && python main.py"]
+# 5. 실행 명령
+# POT 서버를 먼저 배경에서 띄우고, 5초 대기 후 파이썬 메인 앱을 실행합니다.
+CMD ["sh", "-c", "node /opt/bgutil/build/server.js & sleep 5 && python main.py"]
