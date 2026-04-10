@@ -9,7 +9,7 @@ async function startProcess() {
 
     btn.disabled = true;
     result.innerText = "";
-    status.innerText = "⏳ AI가 영상을 분석 중입니다... (1~2분 소요)";
+    status.innerText = " AI가 영상을 분석 중입니다... (1~2분 소요)";
 
     try {
         const fd = new FormData();
@@ -21,10 +21,10 @@ async function startProcess() {
         if (data.status !== "success") throw new Error(data.message);
 
         result.innerText = data.recipe;
-        status.innerText = "✨ 요약이 완료되었습니다!";
+        status.innerText = " 요약이 완료되었습니다!";
 
     } catch (e) {
-        status.innerText = "❌ 에러 발생: " + e.message;
+        status.innerText = " 에러 발생: " + e.message;
         result.innerText = "";
     } finally {
         btn.disabled = false;
