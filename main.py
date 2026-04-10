@@ -43,11 +43,11 @@ async def get_audio_url(url: str = Form(...)):
             'extractor_args': {
                 'youtube': {
                     'player_client': ['web'],
+                },
+                'youtubepot-bgutilhttp': {
+                    'base_url': ['http://127.0.0.1:4416']
                 }
             },
-            'get_pot_args': {
-                'server_url': 'http://localhost:4416'
-            }
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)

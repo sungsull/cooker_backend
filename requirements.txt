@@ -3,6 +3,6 @@ uvicorn
 pydantic
 google-generativeai
 python-multipart
-yt-dlp
+yt-dlp>=2025.5.22
 curl_cffi
 openai-whisper
