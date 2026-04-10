@@ -1,11 +1,12 @@
 fastapi
 uvicorn
+pydantic
 yt-dlp
 openai-whisper
 google-generativeai
-pydantic
 torch
 torchaudio
 torchvision
 setuptools-rust
 ffmpeg-python
+fastapi-middleware-cors
