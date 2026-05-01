@@ -1,5 +1,6 @@
 import os
 import re
+import ssl
 import tempfile
 import traceback
 import uvicorn
@@ -9,7 +10,6 @@ import yt_dlp
 from fastapi import FastAPI, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 from faster_whisper import WhisperModel
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -20,16 +20,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# 정적 파일(js, css) 제공
-# 폴더 구조:
-# project/
-# ├─ main.py
-# ├─ index.html
-# └─ static/
-#    └─ script.js
-if os.path.isdir("static"):
-    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Gemini 설정
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -63,22 +53,38 @@ if youtube_cookies:
         print("쿠키 파일 생성 실패:", e)
 
 
-def get_ydl_opts(download_audio=False, outtmpl=None):
+def get_ydl_opts(download_audio=False, outtmpl=None, insecure_ssl=False):
     opts = {
         "quiet": False,
+        "verbose": True,
         "no_warnings": True,
         "skip_download": not download_audio,
         "writesubtitles": True,
         "writeautomaticsub": True,
         "subtitleslangs": ["ko", "ko-KR", "en"],
+        "retries": 3,
+        "fragment_retries": 3,
+        "extractor_retries": 3,
+
+        # IPv4 강제
+        "source_address": "0.0.0.0",
+
         "http_headers": {
             "User-Agent": (
-                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) "
-                "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 "
-                "Mobile/15E148 Safari/604.1"
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/124.0.0.0 Safari/537.36"
             )
         },
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["web", "ios"]
+            }
+        }
     }
+
+    if insecure_ssl:
+        opts["nocheckcertificate"] = True
 
     if outtmpl:
         opts["outtmpl"] = outtmpl
@@ -94,16 +100,10 @@ def get_ydl_opts(download_audio=False, outtmpl=None):
 
 def clean_subtitle_text(raw_sub: str) -> str:
     text = raw_sub
-
-    # 기본 메타 제거
     text = re.sub(r"WEBVTT", "", text)
     text = re.sub(r"Kind:.*", "", text)
     text = re.sub(r"Language:.*", "", text)
-
-    # SRT 번호 줄 제거
     text = re.sub(r"^\d+\s*$", "", text, flags=re.MULTILINE)
-
-    # VTT/SRT 타임스탬프 제거
     text = re.sub(
         r"\d{2}:\d{2}:\d{2}\.\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}\.\d{3}",
         "",
@@ -114,13 +114,35 @@ def clean_subtitle_text(raw_sub: str) -> str:
         "",
         text
     )
-
-    # 태그 제거
     text = re.sub(r"<[^>]+>", "", text)
+    return " ".join(text.split()).strip()
 
-    # 공백 정리
-    text = " ".join(text.split())
-    return text.strip()
+
+def extract_info_with_ssl_retry(url, download, ydl_opts_normal, ydl_opts_insecure):
+    """
+    먼저 일반 SSL 검증 상태로 시도하고,
+    SSL 관련 오류일 때만 마지막으로 nocheckcertificate=True로 한 번 더 시도
+    """
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts_normal) as ydl:
+            info = ydl.extract_info(url, download=download)
+            return info
+    except Exception as e:
+        msg = str(e)
+        ssl_like = (
+            "UNEXPECTED_EOF_WHILE_READING" in msg
+            or "EOF occurred in violation of protocol" in msg
+            or "SSL" in msg
+            or isinstance(e, ssl.SSLError)
+        )
+
+        if not ssl_like:
+            raise
+
+        print("SSL 관련 오류 감지. nocheckcertificate=True로 1회 재시도합니다.")
+        with yt_dlp.YoutubeDL(ydl_opts_insecure) as ydl:
+            info = ydl.extract_info(url, download=download)
+            return info
 
 
 @app.get("/")
@@ -133,13 +155,23 @@ def home():
     })
 
 
+@app.get("/script.js")
+def get_script():
+    if os.path.exists("script.js"):
+        return FileResponse("script.js", media_type="application/javascript")
+    return JSONResponse({
+        "status": "error",
+        "message": "script.js 파일이 없습니다."
+    }, status_code=404)
+
+
 @app.get("/health")
 def health():
     return {
         "status": "ok",
         "gemini": bool(GEMINI_API_KEY),
-        "static_exists": os.path.isdir("static"),
-        "index_exists": os.path.exists("index.html")
+        "index_exists": os.path.exists("index.html"),
+        "script_exists": os.path.exists("script.js")
     }
 
 
@@ -157,12 +189,27 @@ async def process_video(url: str = Form(...)):
         print("--- [Step 1] 자막 추출 시도 ---")
         with tempfile.TemporaryDirectory() as tmp_dir:
             sub_template = os.path.join(tmp_dir, "sub.%(ext)s")
-            ydl_opts_sub = get_ydl_opts(download_audio=False, outtmpl=sub_template)
 
-            with yt_dlp.YoutubeDL(ydl_opts_sub) as ydl:
-                info = ydl.extract_info(url, download=True)
-                if info:
-                    title = info.get("title", "요리 영상")
+            ydl_opts_sub_normal = get_ydl_opts(
+                download_audio=False,
+                outtmpl=sub_template,
+                insecure_ssl=False
+            )
+            ydl_opts_sub_insecure = get_ydl_opts(
+                download_audio=False,
+                outtmpl=sub_template,
+                insecure_ssl=True
+            )
+
+            info = extract_info_with_ssl_retry(
+                url=url,
+                download=True,
+                ydl_opts_normal=ydl_opts_sub_normal,
+                ydl_opts_insecure=ydl_opts_sub_insecure
+            )
+
+            if info:
+                title = info.get("title", "요리 영상")
 
             subtitle_files = [
                 os.path.join(tmp_dir, f_name)
@@ -185,21 +232,41 @@ async def process_video(url: str = Form(...)):
                     print("자막 파일 읽기 실패:", sub_path, e)
 
         # 2단계: 자막 없으면 오디오 다운로드 후 Whisper
-        if not transcript.strip():
+        if not transcript:
             print("--- [Step 2] 자막 없음. 오디오 분석 시작 ---")
             with tempfile.TemporaryDirectory() as audio_dir:
                 audio_template = os.path.join(audio_dir, "audio.%(ext)s")
-                ydl_opts_audio = get_ydl_opts(download_audio=True, outtmpl=audio_template)
 
-                with yt_dlp.YoutubeDL(ydl_opts_audio) as ydl:
-                    info = ydl.extract_info(url, download=True)
-                    if info:
-                        title = info.get("title", title)
+                ydl_opts_audio_normal = get_ydl_opts(
+                    download_audio=True,
+                    outtmpl=audio_template,
+                    insecure_ssl=False
+                )
+                ydl_opts_audio_insecure = get_ydl_opts(
+                    download_audio=True,
+                    outtmpl=audio_template,
+                    insecure_ssl=True
+                )
 
-                    downloaded_path = ydl.prepare_filename(info)
+                info = extract_info_with_ssl_retry(
+                    url=url,
+                    download=True,
+                    ydl_opts_normal=ydl_opts_audio_normal,
+                    ydl_opts_insecure=ydl_opts_audio_insecure
+                )
 
-                # 실제 파일이 prepare_filename 경로와 다를 경우 대비
-                if not os.path.exists(downloaded_path):
+                if info:
+                    title = info.get("title", title)
+
+                downloaded_path = None
+                if info:
+                    try:
+                        with yt_dlp.YoutubeDL(ydl_opts_audio_normal) as ydl:
+                            downloaded_path = ydl.prepare_filename(info)
+                    except Exception:
+                        pass
+
+                if not downloaded_path or not os.path.exists(downloaded_path):
                     candidates = [
                         os.path.join(audio_dir, x)
                         for x in os.listdir(audio_dir)
@@ -219,7 +286,6 @@ async def process_video(url: str = Form(...)):
                     language="ko",
                     beam_size=1
                 )
-
                 transcript = " ".join(seg.text for seg in segments).strip()
                 method = "Whisper"
 
@@ -229,9 +295,6 @@ async def process_video(url: str = Form(...)):
                 "message": "데이터를 가져오지 못했습니다. 자막/음성이 없거나 다운로드가 차단되었습니다."
             }
 
-        print("전사 길이:", len(transcript))
-
-        # 3단계: Gemini 요약
         prompt = (
             "요리 전문가로서 다음 내용을 아래 형식으로 요약해줘. "
             "마크다운(**) 금지.\n\n"
