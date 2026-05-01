@@ -1,9 +1,6 @@
 fastapi
 uvicorn
-pydantic
+yt_dlp
+faster-whisper
 google-generativeai
 python-multipart
-yt-dlp
-faster-whisper
-ctranslate2
-requests
