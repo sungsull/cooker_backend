@@ -2,5 +2,6 @@ fastapi
 uvicorn
 yt_dlp
 faster-whisper
-google-generativeai
 python-multipart
+youtube-transcript-api
+google-genai
