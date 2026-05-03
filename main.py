@@ -5,12 +5,12 @@ import tempfile
 import traceback
 
 import uvicorn
-import google.generativeai as genai
 import yt_dlp
 from fastapi import FastAPI, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from faster_whisper import WhisperModel
+from google import genai
 from youtube_transcript_api import YouTubeTranscriptApi
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
@@ -27,12 +27,9 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise RuntimeError("GEMINI_API_KEY 환경변수가 없습니다.")
 
-genai.configure(api_key=GEMINI_API_KEY)
+gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 
-# 정확도 향상: gemini-1.5-pro 사용 (flash보다 더 정확한 요약)
-gemini_model = genai.GenerativeModel("models/gemini-1.5-pro")
-
-# 정확도 향상: Whisper 모델을 tiny → small로 업그레이드 (속도는 조금 느려지지만 훨씬 정확)
+# Whisper 모델 로드 (small: tiny보다 정확)
 print("Whisper 모델 로딩 중...")
 whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
 print("Whisper 모델 로딩 완료!")
@@ -321,7 +318,6 @@ async def process_video(url: str = Form(...)):
 
                     print("다운로드된 오디오:", downloaded_path)
 
-                    # 정확도 향상: beam_size=5, vad_filter로 무음 구간 제거
                     segments, _ = whisper_model.transcribe(
                         downloaded_path,
                         language="ko",
@@ -358,8 +354,11 @@ async def process_video(url: str = Form(...)):
             f"영상 내용:\n{transcript[:8000]}"
         )
 
-        gemini_resp = gemini_model.generate_content(prompt)
-        recipe_text = getattr(gemini_resp, "text", "").strip()
+        response = gemini_client.models.generate_content(
+            model="gemini-1.5-pro",
+            contents=prompt
+        )
+        recipe_text = response.text.strip()
 
         if not recipe_text:
             return {
